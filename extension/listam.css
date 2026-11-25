@@ -1,0 +1,143 @@
+/* Found: the photo block becomes the first row of list.am's page grid (.pmain, normally
+ * "content column | #pmenu") and spans both columns. Car info and seller card stay below it. */
+.lavc-layout > .lavc-split {
+  grid-column: 1 / -1;
+  margin-bottom: 36px;
+}
+.lavc-split {
+  display: grid;
+  grid-template-columns: var(--lavc-left, 1fr) 16px var(--lavc-right, 1fr);
+  align-items: start;
+  margin-bottom: 16px;
+}
+.lavc-split:not([data-state="found"]) {
+  grid-template-columns: minmax(0, 1fr);
+}
+.lavc-split:not([data-state="found"]) .lavc-splitter,
+.lavc-split:not([data-state="found"]) .lavc-col-title {
+  display: none;
+}
+.lavc-col {
+  min-width: 0;
+}
+.lavc-split[data-state="found"] .lavc-col--listam .vit,
+.lavc-split[data-state="found"] .lavc-col--listam [data-testid="listing-image-gallery"] {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+.lavc-col-title {
+  font: 500 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: #666;
+  margin: 0 0 6px;
+}
+.lavc-splitter {
+  align-self: stretch;
+  cursor: col-resize;
+  position: relative;
+}
+.lavc-splitter::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 7px;
+  width: 2px;
+  border-radius: 1px;
+  background: #e3e3e3;
+}
+.lavc-splitter:hover::after {
+  background: #b5b5b5;
+}
+/* Auction details merged into list.am's car information (uses list.am's own .gt / .attr / .at3 styles). */
+.lavc-gt a {
+  color: #1a73e8;
+  text-decoration: none;
+}
+.lavc-gt a:hover {
+  text-decoration: underline;
+}
+.lavc-tile .attr-icon {
+  background-size: 28px 28px;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+.lavc-tile .lavc-tile-value {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.lavc-tile .lavc-tile-value a {
+  color: #1a73e8;
+  text-decoration: none;
+}
+.lavc-warnings {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 4px 0 8px;
+}
+.lavc-warn {
+  padding: 8px 12px;
+  background: #fef7e0;
+  border: 1px solid #f9d77e;
+  border-radius: 8px;
+  color: #7a4f01;
+  font: 13px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+.lavc-cmp {
+  margin: 3px 0 0;
+  font: 500 12px/16px system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: #5f6368;
+  white-space: normal;
+}
+.lavc-bad,
+.lavc-tile .lavc-tile-value.lavc-bad {
+  color: #d93025 !important;
+}
+a.lavc-vin-link {
+  color: #1a73e8;
+  text-decoration: none;
+  border-bottom: 1px dashed currentColor;
+}
+a.lavc-vin-link::after {
+  content: " ↗";
+  font-size: 0.85em;
+}
+a.lavc-vin-link:hover {
+  border-bottom-style: solid;
+}
+
+.lavc-pill {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 1px 8px;
+  border-radius: 10px;
+  font: 500 11px/18px system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: #fff;
+  background: #9aa0a6;
+  cursor: default;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.lavc-pill--found {
+  background: #d93025;
+  cursor: pointer;
+}
+.lavc-pill--not_found {
+  background: #188038;
+}
+.lavc-pill--blocked,
+.lavc-pill--error,
+.lavc-pill--invalid_vin {
+  background: #f29900;
+}
+@media (max-width: 1024px) {
+  .lavc-split[data-state="found"] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .lavc-split .lavc-splitter {
+    display: none;
+  }
+  .lavc-split[data-state="found"] .lavc-col--history {
+    margin-top: 16px;
+  }
+}

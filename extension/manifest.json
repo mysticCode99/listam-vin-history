@@ -1,0 +1,40 @@
+{
+  "manifest_version": 3,
+  "name": "List.am VIN History",
+  "version": "1.0.0",
+  "description": "Shows bid.cars auction history and photos next to list.am car listings.",
+  "permissions": ["storage", "scripting", "tabs", "offscreen"],
+  "host_permissions": [
+    "https://www.list.am/*",
+    "https://bid.cars/*",
+    "https://mercury.bid.cars/*",
+    "https://images.bid.cars/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.list.am/item/*", "https://www.list.am/*/item/*"],
+      "js": ["config.js", "listam.js"],
+      "css": ["listam.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_title": "List.am VIN History",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}
