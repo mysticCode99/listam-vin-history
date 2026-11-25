@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "description": "Shows bid.cars auction history and photos next to list.am car listings.",
   "permissions": ["storage", "scripting", "tabs", "offscreen"],
+  "optional_permissions": ["nativeMessaging"],
   "host_permissions": [
     "https://www.list.am/*",
     "https://bid.cars/*",

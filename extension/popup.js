@@ -76,4 +76,37 @@ manualVin.onchange = async () => {
   msgEl.textContent = "Saved. Reload the listing to apply.";
 };
 
+const codexButton = document.getElementById("codex");
+const codexStatus = document.getElementById("codex-status");
+let codexConnected = false;
+
+function showCodexState(state) {
+  codexConnected = state === "connected";
+  codexButton.disabled = state === "connecting";
+  codexButton.textContent = codexConnected ? "Disconnect Codex" : "Connect Codex";
+  codexStatus.textContent = {
+    connected: "Ready to look up a VIN in Codex.",
+    connecting: "Opening the local connection…",
+    unavailable: "Couldn’t start the local bridge. Check the MCP setup in the README.",
+    disconnected: "Optional. Set up the local MCP before connecting.",
+  }[state] || "";
+}
+
+codexButton.onclick = async () => {
+  try {
+    if (!codexConnected && !await chrome.permissions.request({ permissions: ["nativeMessaging"] })) {
+      codexStatus.textContent = "Allow the browser permission to connect Codex.";
+      return;
+    }
+    await chrome.runtime.sendMessage({ type: codexConnected ? "mcpDisconnect" : "mcpConnect" });
+  } catch (_) {
+    showCodexState("unavailable");
+  }
+};
+
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg.type === "mcpStateChanged") showCodexState(msg.state);
+});
+chrome.runtime.sendMessage({ type: "mcpStatus" }).then(showCodexState, () => showCodexState("unavailable"));
+
 refresh();
