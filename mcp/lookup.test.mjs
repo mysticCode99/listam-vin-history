@@ -20,30 +20,82 @@ function event() {
   return { addListener: (fn) => { listener = fn; }, emit: (...args) => listener?.(...args) };
 }
 
-function worker(port, record) {
+function run(context, ...files) {
+  for (const file of files) {
+    runInContext(readFileSync(new URL(`../extension/${file}`, import.meta.url), "utf8"), context);
+  }
+}
+
+function listingDocument({ mileage, condition, vin: value }) {
+  const tile = (text) => ({ querySelector: () => ({ textContent: text }) });
+  const content = {
+    querySelector: (selector) => {
+      if (selector === ".attr-value") return { textContent: mileage };
+      if (selector.includes("mileage")) return { closest: () => tile(mileage) };
+      if (selector.includes("general-condition")) return { closest: () => tile(condition) };
+      return null;
+    },
+    querySelectorAll: () => value === undefined ? [] : [{ textContent: "VIN", closest: () => tile(value) }],
+  };
+  return { querySelector: (selector) => selector === "#pcontent .vi" ? content : null };
+}
+
+function worker(port, record, page = {}) {
   const onMessage = event();
+  const onOffscreenMessage = event();
   const cacheReads = [];
+  const fetches = [];
+  const tabsRead = [];
   let connections = 0;
+  const offscreen = createContext({
+    chrome: { runtime: { onMessage: onOffscreenMessage } },
+    document: { createElement: (tag) => {
+      assert.equal(tag, "template");
+      return { content: page.doc };
+    } },
+  });
+  run(offscreen, "config.js", "listing.js", "offscreen.js");
   const context = createContext({
-    importScripts: (...files) => files.forEach(run),
+    AbortSignal,
+    URL,
+    importScripts: (...files) => run(context, ...files),
+    fetch: async (url, options) => {
+      fetches.push({ url, options });
+      return new Response("<html>listing fixture</html>", {
+        status: page.httpStatus || 200, headers: { "Content-Type": "text/html" },
+      });
+    },
     chrome: {
       runtime: {
         onMessage,
         getURL: () => popup,
         connectNative: () => { connections++; return port; },
-        sendMessage: async () => {},
+        sendMessage: async (msg) => {
+          let response;
+          onOffscreenMessage.emit(msg, {}, (value) => { response = value; });
+          return response;
+        },
       },
-      tabs: { onRemoved: event() },
+      tabs: {
+        onRemoved: event(),
+        query: async () => page.open ? [
+          { id: 1, url: "https://www.list.am/item/777" },
+          { id: 2, url: "https://www.list.am/ru/item/24173931?from=favorites" },
+        ] : [],
+        sendMessage: async (tabId, msg, { frameId }) => {
+          tabsRead.push({ tabId, type: msg.type, itemId: msg.itemId, frameId });
+          offscreen.listingDocument = page.doc;
+          return runInContext("LAVC_LISTING.read(listingDocument)", offscreen);
+        },
+      },
+      offscreen: { hasDocument: async () => true },
       storage: { local: { get: async (key) => {
         cacheReads.push(key);
         return { [key]: record };
       } } },
     },
   });
-  function run(file) {
-    runInContext(readFileSync(new URL(`../extension/${file}`, import.meta.url), "utf8"), context);
-  }
-  run("background.js");
+  run(context, "background.js");
   return {
     send(type, sender = popup) {
       let result;
@@ -51,11 +103,13 @@ function worker(port, record) {
       return result;
     },
     cacheReads,
+    fetches,
+    tabsRead,
     get connections() { return connections; },
   };
 }
 
-test("only the popup connects Codex, and a VIN lookup uses the extension's cache", { timeout: 3000 }, async () => {
+test("only the popup connects MCP, and invalid native requests never reach a source", { timeout: 3000 }, async () => {
   const onMessage = event();
   const onDisconnect = event();
   const posted = Promise.withResolvers();
@@ -70,7 +124,9 @@ test("only the popup connects Codex, and a VIN lookup uses the extension's cache
   onMessage.emit({ type: "ready" });
   assert.equal(browser.send("mcpStatus"), "connected");
   await onMessage.emit({ type: "lookup", id: "bad", vin: "https://example.com/" });
+  await onMessage.emit({ type: "checkListing", id: "bad", itemId: "../24173931" });
   assert.deepEqual(browser.cacheReads, []);
+  assert.deepEqual(browser.fetches, []);
   await onMessage.emit({ type: "lookup", id: "first", vin });
   const response = await posted.promise;
   assert.equal(response.id, "first");
@@ -80,7 +136,7 @@ test("only the popup connects Codex, and a VIN lookup uses the extension's cache
   assert.notEqual(browser.send("mcpStatus"), "connected");
 });
 
-test("the stdio tool exchanges VIN requests with the native browser host", { timeout: 10000 }, async (t) => {
+test("local MCP returns verified VIN history and compares exact List.am items", { timeout: 10000 }, async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "listam-"));
   const children = [];
   t.after(async () => {
@@ -117,25 +173,33 @@ test("the stdio tool exchanges VIN requests with the native browser host", { tim
     }
   }
   const lookup = (vin) => call("tools/call", { name: "lookup_vin", arguments: { vin } });
+  const checkListing = (url) => call("tools/call", { name: "check_listing", arguments: { url } });
   await call("initialize", {
     protocolVersion: "2025-11-25", capabilities: {}, clientInfo: { name: "listam-test", version: "1.0.0" },
   });
   mcp.stdin.write('{"jsonrpc":"2.0","method":"notifications/initialized"}\n');
-  assert.deepEqual((await call("tools/list", {})).tools.map((tool) => tool.name), ["lookup_vin"]);
+  assert.equal((await checkListing("https://www.list.am/item/24173931")).structuredContent?.status, "disconnected");
+  assert.deepEqual((await call("tools/list", {})).tools.map((tool) => tool.name).sort(), ["check_listing", "lookup_vin"]);
   assert.equal((await lookup(vin)).structuredContent.status, "disconnected");
   assert.equal((await lookup("IIIIIIIIIIIIIIIII")).isError, true);
+  for (const url of ["https://www.list.am.evil.test/item/24173931", "https://name@list.am/item/24173931",
+    "https://list.am:8443/item/24173931", "http://www.list.am/item/24173931", "https://www.list.am/item/24173931/extra"]) {
+    assert.equal((await checkListing(url)).isError, true);
+  }
 
   const host = start("native-host.mjs");
   const fromHost = readNativeMessages(host.stdout);
   const onMessage = event();
   const photo = "https://mercury.bid.cars/1-61989692/photo.jpg";
   const lot = {
-    vin, id: "1-61989692", url: "https://bid.cars/en/lot/1-61989692/fixture", odometerMi: 35000,
-    primaryDamage: "Front end", saleDocument: "Salvage", images: [photo, "https://images.bid.cars.example/original.jpg"],
+    vin, id: "1-61989692", url: "https://bid.cars/en/lot/1-61989692/fixture", odometerMi: 42090,
+    primaryDamage: "Front end", secondaryDamage: "Rear", saleDocument: "Salvage",
+    images: [photo, "https://images.bid.cars.example/original.jpg"],
   };
+  const page = { doc: listingDocument({ vin, mileage: "113,000 կմ", condition: "Չվթարված" }) };
   const browser = worker({
     onMessage, onDisconnect: event(), postMessage: (message) => sendNativeMessage(host.stdin, message),
-  }, { status: "found", vin, checkedAt: Date.now(), lot });
+  }, { status: "found", vin, checkedAt: Date.now(), lot }, page);
   browser.send("mcpConnect");
   await onMessage.emit((await fromHost.next()).value);
   assert.equal(browser.send("mcpStatus"), "connected");
@@ -147,9 +211,51 @@ test("the stdio tool exchanges VIN requests with the native browser host", { tim
   const { structuredContent } = await found;
   assert.equal(structuredContent.status, "found");
   assert.equal(structuredContent.fromCache, true);
-  assert.equal(structuredContent.lot.odometerMi, 35000);
+  assert.equal(structuredContent.lot.odometerMi, 42090);
   assert.equal(structuredContent.lot.saleDocument, "Salvage");
   assert.deepEqual(structuredContent.lot.images, [photo]);
+
+  async function compare() {
+    const waiting = checkListing("https://list.am/en/item/24173931/?source=share#photos");
+    const query = (await fromHost.next()).value;
+    assert.equal(query.type, "checkListing");
+    assert.equal(query.itemId, "24173931");
+    await onMessage.emit(query);
+    return (await waiting).structuredContent;
+  }
+  const mazda = await compare();
+  assert.equal(mazda.status, "found");
+  assert.equal(mazda.vin, vin);
+  assert.equal(mazda.listing.url, "https://www.list.am/item/24173931");
+  assert.equal(mazda.listing.mileageKm, 113000);
+  assert.equal(mazda.listing.condition, "Չվթարված");
+  assert.equal(mazda.auctionMileageKm, 67737);
+  assert.deepEqual(mazda.findings.map((finding) => finding.type), ["historical_damage"]);
+  assert.equal(browser.fetches[0].url, mazda.listing.url);
+  assert.equal(browser.fetches[0].options.redirect, "error");
+  assert.equal(browser.fetches[0].options.credentials, "omit");
+
+  page.httpStatus = 403;
+  const cacheReadsBefore = browser.cacheReads.length;
+  assert.equal((await compare()).status, "listing_unavailable");
+  assert.equal(browser.cacheReads.length, cacheReadsBefore);
+
+  page.open = true;
+  page.doc = listingDocument({ vin, mileage: "40,000 mi", condition: "Undamaged" });
+  const lowMileage = await compare();
+  assert.equal(lowMileage.listing.mileageKm, 64374);
+  assert.deepEqual(lowMileage.findings.map((finding) => finding.type), ["historical_damage", "lower_mileage"]);
+  assert.deepEqual(browser.tabsRead, [{ tabId: 2, type: "readMcpListing", itemId: "24173931", frameId: 0 }]);
+  assert.equal(browser.fetches.length, 2, "an open matching tab avoids a background request");
+
+  page.doc = listingDocument({ vin, mileage: "42,000 mi", condition: "" });
+  assert.deepEqual((await compare()).findings, [], "small odometer differences stay within tolerance");
+  const lastCacheReads = browser.cacheReads.length;
+  page.doc = listingDocument({ mileage: "113,000 կմ", condition: "Undamaged" });
+  assert.equal((await compare()).status, "no_vin");
+  page.doc = listingDocument({ vin: "INVALID", mileage: "113,000 կմ", condition: "Undamaged" });
+  assert.equal((await compare()).status, "invalid_vin");
+  assert.equal(browser.cacheReads.length, lastCacheReads);
 
   for (const [status, record] of [
     ["not_found", { status: "not_found", vin }],

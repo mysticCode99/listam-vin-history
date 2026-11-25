@@ -3,18 +3,20 @@ import { once } from "node:events";
 import { mkdtemp, rm } from "node:fs/promises";
 import { createServer } from "node:http";
 import { join } from "node:path";
-import { VIN_PATTERN, privateDirectory, readNativeMessages, sendNativeMessage } from "./bridge.mjs";
+import { ITEM_ID_PATTERN, VIN_PATTERN, privateDirectory, readNativeMessages, sendNativeMessage } from "./bridge.mjs";
 
 let pending;
 const server = createServer((request, response) => {
-  const vin = request.url?.startsWith("/vin/") ? request.url.slice(5) : "";
-  if (request.method !== "GET" || !VIN_PATTERN.test(vin)) {
+  const [, route, value] = request.url?.split("/") ?? [];
+  const payload = route === "vin" && VIN_PATTERN.test(value) ? { type: "lookup", vin: value }
+    : route === "listing" && ITEM_ID_PATTERN.test(value) ? { type: "checkListing", itemId: value } : null;
+  if (request.method !== "GET" || !payload || request.url !== `/${route}/${value}`) {
     response.writeHead(400).end();
     return;
   }
   response.setHeader("Content-Type", "application/json");
   if (pending) {
-    response.end(JSON.stringify({ status: "busy", vin }));
+    response.end(JSON.stringify({ status: "busy" }));
     return;
   }
   const id = randomUUID();
@@ -22,7 +24,7 @@ const server = createServer((request, response) => {
   response.on("close", () => {
     if (pending?.id === id) pending = undefined;
   });
-  sendNativeMessage(process.stdout, { type: "lookup", id, vin });
+  sendNativeMessage(process.stdout, { ...payload, id });
 });
 
 let session;
