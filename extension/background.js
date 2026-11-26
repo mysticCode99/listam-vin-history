@@ -361,6 +361,46 @@ async function fetchImageAsDataUrl(url) {
   return `data:${blob.type || "image/jpeg"};base64,${btoa(bin)}`;
 }
 
+/* ---------------------------------------------------------------- Codex bridge */
+
+let mcpPort;
+let mcpState = "disconnected";
+
+function setMcpState(state) {
+  mcpState = state;
+  chrome.runtime.sendMessage({ type: "mcpStateChanged", state }).catch(() => {});
+}
+
+function connectMcp() {
+  if (mcpPort) return;
+  try {
+    const port = chrome.runtime.connectNative("io.github.mysticcode99.listam_vin_history");
+    mcpPort = port;
+    setMcpState("connecting");
+    port.onMessage.addListener(async (msg) => {
+      if (mcpPort !== port) return;
+      if (msg?.type === "ready") return setMcpState("connected");
+      if (mcpState !== "connected" || msg?.type !== "lookup" ||
+          typeof msg.id !== "string" || typeof msg.vin !== "string" || !C.VIN_RE.test(msg.vin)) return;
+
+      const result = await lookup(msg.vin, false).catch(() => ({ status: "error", vin: msg.vin }));
+      if (mcpPort === port) {
+        try {
+          port.postMessage({ type: "lookupResult", id: msg.id, result });
+        } catch (_) {} // The browser can close the port before onDisconnect arrives.
+      }
+    });
+    port.onDisconnect.addListener(() => {
+      const unavailable = !!chrome.runtime.lastError || mcpState === "connecting";
+      if (mcpPort !== port) return;
+      mcpPort = undefined;
+      setMcpState(unavailable ? "unavailable" : "disconnected");
+    });
+  } catch (_) {
+    setMcpState("unavailable");
+  }
+}
+
 /* ---------------------------------------------------------------- badge + messages */
 
 const BADGES = {
@@ -388,6 +428,19 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   const tabId = sender.tab?.id;
 
   switch (msg.type) {
+    case "mcpStatus":
+    case "mcpConnect":
+    case "mcpDisconnect":
+      if (sender.url !== chrome.runtime.getURL("popup.html")) return false;
+      if (msg.type === "mcpConnect") connectMcp();
+      if (msg.type === "mcpDisconnect") {
+        const port = mcpPort;
+        mcpPort = undefined;
+        port?.disconnect();
+        setMcpState("disconnected");
+      }
+      sendResponse(mcpState);
+      return false;
     case "lookup":
       lookup(msg.vin, !!msg.force).then(sendResponse, (e) =>
         sendResponse({ status: "error", vin: msg.vin, error: String(e) })

@@ -129,8 +129,8 @@ bid.cars կայքը չեն փոփոխվում։
 - **Եթե bid.cars-ը խնդրում է հաստատել, որ ռոբոտ չեք,** ընդլայնումը ցույց է տալիս **Open bid.cars** հղումը։
   Բացեք այն, հաստատեք, ապա սեղմեք **Re-check**։
 - **«Չի գտնվել»-ը ապացույց չէ**, որ մեքենան երբեք վթարված չի եղել. կան նաև այլ աճուրդներ և աղբյուրներ։
-- **Գաղտնիություն։** Ընդլայնումը կապվում է միայն list.am և bid.cars կայքերի հետ։ Ձեր տվյալները ոչ մի տեղ
-  չեն ուղարկվում, գրանցում պետք չէ։
+- **Գաղտնիություն։** Ընդլայնումը VIN կոդը որոնում է bid.cars կայքում։ Գրանցում պետք չէ։ Եթե միացնեք
+  [տեղական Codex MCP-ն](mcp/README.md), VIN կոդը և աճուրդի տվյալները հասանելի կլինեն նաև Codex-ում։
 
 ---
 
@@ -250,8 +250,13 @@ confirm you are not a robot, confirm. This lets the extension load the auction p
 - **If bid.cars asks you to confirm you are not a robot,** the extension shows an **Open bid.cars** link. Open it,
   confirm, then click **Re-check**.
 - **"Not found" is not proof** that the car was never damaged; other auctions and sources exist.
-- **Privacy.** The extension only talks to list.am and bid.cars. None of your data is sent anywhere, and no
-  registration is needed.
+- **Privacy.** The extension searches bid.cars for the VIN. No registration is needed. Connecting the optional
+  MCP shares the queried VIN and auction result with your Codex session.
+
+### Auction detective in Codex
+
+Paste a VIN into Codex and ask for its auction backstory, including damage, title type, mileage, and photo links.
+The optional local MCP uses the existing extension for lookups. [Set up Codex on your Mac](mcp/README.md).
 
 ---
 
