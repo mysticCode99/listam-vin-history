@@ -94,10 +94,6 @@ function showMcpState(state) {
 
 mcpButton.onclick = async () => {
   try {
-    if (!mcpConnected && !await chrome.permissions.request({ permissions: ["nativeMessaging"] })) {
-      mcpStatus.textContent = "Allow the browser permission to connect MCP.";
-      return;
-    }
     await chrome.runtime.sendMessage({ type: mcpConnected ? "mcpDisconnect" : "mcpConnect" });
   } catch (_) {
     showMcpState("unavailable");

@@ -155,6 +155,9 @@ function listingReport(itemId, data) {
   listing.mileage = typeof source?.mileage === "string" ? source.mileage.slice(0, 200) : null;
   listing.mileageKm = Number.isSafeInteger(source?.mileageKm) && source.mileageKm >= 0 ? source.mileageKm : null;
   listing.condition = typeof source?.condition === "string" ? source.condition.slice(0, 200) : null;
+  if (source?.status === "error") {
+    return { status: "error", listing, message: "The browser could not parse this listing. Reconnect the extension and retry." };
+  }
   if (source?.status === "no_vin") {
     return { status: "no_vin", listing, message: "The listing does not show a VIN in its vehicle details." };
   }

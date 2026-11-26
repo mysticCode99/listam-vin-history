@@ -1,7 +1,7 @@
 const LAVC_LISTING = (() => {
   const { LISTAM: L, VIN_RE } = LAVC_CONFIG;
   const MI_TO_KM = 1.609344;
-  const itemId = (path) => path.match(/^\/(?:[a-z]{2}\/)?item\/(\d{1,12})\/?$/)?.[1];
+  const itemId = (path) => path.match(L.itemPathRe)?.[1];
 
   function attrTileByIcon(doc, iconSelector) {
     return doc.querySelector(iconSelector)?.closest(L.attrTile) || null;
@@ -34,7 +34,7 @@ const LAVC_LISTING = (() => {
   }
 
   function read(doc) {
-    const content = doc.querySelector("#pcontent .vi");
+    const content = doc.querySelector(L.itemContent);
     if (!content?.querySelector(L.attrValue)) return { status: "listing_unavailable" };
     const { status, vin } = findVin(content);
     return { status, vin, ...details(content) };
@@ -42,15 +42,14 @@ const LAVC_LISTING = (() => {
 
   function compare(listing, lot) {
     const auctionKm = Number.isFinite(lot?.odometerMi) && lot.odometerMi > 0 ? Math.round(lot.odometerMi * MI_TO_KM) : null;
-    const damaged = [lot?.primaryDamage, lot?.secondaryDamage].some((value) => {
-      const text = typeof value === "string" ? value.trim() : "";
-      return !!text && !/^(-|none|normal wear.*|no damage)$/i.test(text);
-    });
+    const damaged = [lot?.primaryDamage, lot?.secondaryDamage]
+      .flatMap((value) => typeof value === "string" ? value.split(" / ") : [])
+      .some((text) => !!text.trim() && !/^(-|none|normal wear.*|no damage)$/i.test(text.trim()));
     return {
       auctionKm,
       damaged,
-      lowerMileage: listing.mileageKm !== null && auctionKm !== null && listing.mileageKm + 1000 < auctionKm,
-      historicalDamage: damaged && L.notDamagedTexts.includes(listing.condition.toLowerCase()),
+      lowerMileage: Number.isSafeInteger(listing.mileageKm) && auctionKm !== null && listing.mileageKm + 1000 < auctionKm,
+      historicalDamage: damaged && typeof listing.condition === "string" && L.notDamagedTexts.includes(listing.condition.toLowerCase()),
     };
   }
 

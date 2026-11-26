@@ -34,9 +34,10 @@ with its own supported model. Both tools use the installed List.am VIN History e
 
    Keep the printed Codex timeout. If your client exposes a tool timeout, allow at least 125 seconds for slow
    lookups. Use the absolute paths from setup so desktop apps can find Node and the server.
-4. Open the extension popup, choose **Connect MCP**, and allow the browser permission. Keep the browser open
-   while using the tools. Connect again after restarting the browser or reloading the extension. If you already
-   use the VIN tool, reload the updated extension and reconnect before trying the listing tool.
+4. Allow the browser’s native messaging permission when loading or updating the extension. Open the extension
+   popup and choose **Connect MCP** to start the bridge. Keep the browser open while using the tools. Connect
+   again after restarting the browser or reloading the extension. If you already use the VIN tool, reload
+   the updated extension and reconnect before trying the listing tool.
 
 ## Try it
 
